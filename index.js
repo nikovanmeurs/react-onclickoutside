@@ -28,79 +28,89 @@
 }(this, function () {
   "use strict";
 
-  // Use a parallel array because we can't use
-  // objects as keys, they get toString-coerced
-  var registeredComponents = [];
-  var handlers = [];
+  var factory = function (config) {
+    // Use a parallel array because we can't use
+    // objects as keys, they get toString-coerced
+    var registeredComponents = [];
+    var handlers = [];
 
-  var IGNORE_CLASS = 'ignore-react-onclickoutside';
+    var IGNORE_CLASS = config.ignoreClass || 'ignore-react-onclickoutside';
 
-  return {
-    componentDidMount: function() {
-      if(!this.handleClickOutside)
-        throw new Error("Component lacks a handleClickOutside(event) function for processing outside click events.");
+    return {
+      componentDidMount: function() {
+        if(!this.handleClickOutside)
+          throw new Error("Component lacks a handleClickOutside(event) function for processing outside click events.");
 
-      var fn = this.__outsideClickHandler = (function(localNode, eventHandler) {
-        return function(evt) {
-          var source = evt.target;
-          var found = false;
-          // If source=local then this event came from "somewhere"
-          // inside and should be ignored. We could handle this with
-          // a layered approach, too, but that requires going back to
-          // thinking in terms of Dom node nesting, running counter
-          // to React's "you shouldn't care about the DOM" philosophy.
-          while(source.parentNode) {
-            found = (source === localNode || source.classList && source.classList.contains(IGNORE_CLASS));
-            if(found) return;
-            source = source.parentNode;
+        var fn = this.__outsideClickHandler = (function(localNode, eventHandler) {
+          return function(evt) {
+            var source = evt.target;
+            var found = false;
+            // If source=local then this event came from "somewhere"
+            // inside and should be ignored. We could handle this with
+            // a layered approach, too, but that requires going back to
+            // thinking in terms of Dom node nesting, running counter
+            // to React's "you shouldn't care about the DOM" philosophy.
+            while(source.parentNode) {
+              found = (source === localNode || source.classList && source.classList.contains(IGNORE_CLASS));
+              if(found) return;
+              source = source.parentNode;
+            }
+            eventHandler(evt);
           }
-          eventHandler(evt);
+        }(this.getDOMNode(), this.handleClickOutside));
+
+        var pos = registeredComponents.length;
+        registeredComponents.push(this);
+        handlers[pos] = fn;
+
+        // If there is a truthy disableOnClickOutside property for this
+        // component, don't immediately start listening for outside events.
+        if (!this.props.disableOnClickOutside) {
+          this.enableOnClickOutside();
         }
-      }(this.getDOMNode(), this.handleClickOutside));
+      },
 
-      var pos = registeredComponents.length;
-      registeredComponents.push(this);
-      handlers[pos] = fn;
-
-      // If there is a truthy disableOnClickOutside property for this
-      // component, don't immediately start listening for outside events.
-      if (!this.props.disableOnClickOutside) {
-        this.enableOnClickOutside();
-      }
-    },
-
-    componentWillUnmount: function() {
-      this.disableOnClickOutside();
-      this.__outsideClickHandler = false;
-      var pos = registeredComponents.indexOf(this);
-      if( pos>-1) {
-        if (handlers[pos]) {
-          // clean up so we don't leak memory
-          handlers.splice(pos, 1);
-          registeredComponents.splice(pos, 1);
+      componentWillUnmount: function() {
+        this.disableOnClickOutside();
+        this.__outsideClickHandler = false;
+        var pos = registeredComponents.indexOf(this);
+        if( pos>-1) {
+          if (handlers[pos]) {
+            // clean up so we don't leak memory
+            handlers.splice(pos, 1);
+            registeredComponents.splice(pos, 1);
+          }
         }
+      },
+
+      /**
+       * Can be called to explicitly enable event listening
+       * for clicks and touches outside of this element.
+       */
+      enableOnClickOutside: function() {
+        var fn = this.__outsideClickHandler;
+        document.addEventListener("mousedown", fn);
+        document.addEventListener("touchstart", fn);
+      },
+
+      /**
+       * Can be called to explicitly disable event listening
+       * for clicks and touches outside of this element.
+       */
+      disableOnClickOutside: function(fn) {
+        var fn = this.__outsideClickHandler;
+        document.removeEventListener("mousedown", fn);
+        document.removeEventListener("touchstart", fn);
       }
-    },
-
-    /**
-     * Can be called to explicitly enable event listening
-     * for clicks and touches outside of this element.
-     */
-    enableOnClickOutside: function() {
-      var fn = this.__outsideClickHandler;
-      document.addEventListener("mousedown", fn);
-      document.addEventListener("touchstart", fn);
-    },
-
-    /**
-     * Can be called to explicitly disable event listening
-     * for clicks and touches outside of this element.
-     */
-    disableOnClickOutside: function(fn) {
-      var fn = this.__outsideClickHandler;
-      document.removeEventListener("mousedown", fn);
-      document.removeEventListener("touchstart", fn);
-    }
+    };  
   };
 
+  // Initialize the return value using default settings,
+  // so default behaviour remains the same.
+  var exports = factory();
+  // Expose the factory function to enable the
+  // setting of different ignore classes per instance.
+  exports.withConfig = factory;
+
+  return exports;
 }));
