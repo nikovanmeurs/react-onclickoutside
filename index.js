@@ -105,7 +105,7 @@
     };  
   };
 
-  // Initialize the return value using default settings,
+  // Initialize the exposed mixin without passing config
   // so default behaviour remains the same.
   var exports = factory();
   // Expose the factory function to enable the
