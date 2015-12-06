@@ -15,17 +15,19 @@
 (function (root, factory) {
   if (typeof define === 'function' && define.amd) {
     // AMD. Register as an anonymous module.
-    define([], factory);
+    define(['react-dom'], function(reactDom) {
+      return factory(root, reactDom);
+    });
   } else if (typeof exports === 'object') {
     // Node. Note that this does not work with strict
     // CommonJS, but only CommonJS-like environments
     // that support module.exports
-    module.exports = factory();
+    module.exports = factory(root, require('react-dom'));
   } else {
     // Browser globals (root is window)
-    root.OnClickOutside = factory();
+    root.OnClickOutside = factory(root, ReactDOM);
   }
-}(this, function () {
+}(this, function (root, ReactDOM) {
   "use strict";
 
   var factory = function (config) {
@@ -36,13 +38,30 @@
 
     var IGNORE_CLASS = config.ignoreClass || 'ignore-react-onclickoutside';
 
+    var isSourceFound = function(source, localNode) {
+      if (source === localNode) {
+        return true;
+      }
+      // SVG <use/> elements do not technically reside in the rendered DOM, so
+      // they do not have classList directly, but they offer a link to their
+      // corresponding element, which can have classList. This extra check is for
+      // that case.
+      // See: http://www.w3.org/TR/SVG11/struct.html#InterfaceSVGUseElement
+      // Discussion: https://github.com/Pomax/react-onclickoutside/pull/17
+      if (source.correspondingElement) {
+        return source.correspondingElement.classList.contains(IGNORE_CLASS);
+      }
+      return source.classList.contains(IGNORE_CLASS);
+    };
+
     return {
       componentDidMount: function() {
-        if(!this.handleClickOutside)
+        if(typeof this.handleClickOutside !== "function")
           throw new Error("Component lacks a handleClickOutside(event) function for processing outside click events.");
 
         var fn = this.__outsideClickHandler = (function(localNode, eventHandler) {
           return function(evt) {
+            evt.stopPropagation();
             var source = evt.target;
             var found = false;
             // If source=local then this event came from "somewhere"
@@ -51,13 +70,13 @@
             // thinking in terms of Dom node nesting, running counter
             // to React's "you shouldn't care about the DOM" philosophy.
             while(source.parentNode) {
-              found = (source === localNode || source.classList && source.classList.contains(IGNORE_CLASS));
+              found = isSourceFound(source, localNode);
               if(found) return;
               source = source.parentNode;
             }
             eventHandler(evt);
           }
-        }(this.getDOMNode(), this.handleClickOutside));
+        }(ReactDOM.findDOMNode(this), this.handleClickOutside));
 
         var pos = registeredComponents.length;
         registeredComponents.push(this);
@@ -89,20 +108,24 @@
        */
       enableOnClickOutside: function() {
         var fn = this.__outsideClickHandler;
-        document.addEventListener("mousedown", fn);
-        document.addEventListener("touchstart", fn);
+        if (document != null) {
+          document.addEventListener("mousedown", fn);
+          document.addEventListener("touchstart", fn);
+        }
       },
 
       /**
        * Can be called to explicitly disable event listening
        * for clicks and touches outside of this element.
        */
-      disableOnClickOutside: function(fn) {
+      disableOnClickOutside: function() {
         var fn = this.__outsideClickHandler;
-        document.removeEventListener("mousedown", fn);
-        document.removeEventListener("touchstart", fn);
+        if (document != null) {
+          document.removeEventListener("mousedown", fn);
+          document.removeEventListener("touchstart", fn);
+        }
       }
-    };  
+    }
   };
 
   // Initialize the exposed mixin without passing config
