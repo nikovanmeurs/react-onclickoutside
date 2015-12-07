@@ -128,9 +128,9 @@
     }
   };
 
-  // Initialize the exposed mixin without passing config
+  // Initialize the exposed mixin with empty config
   // so default behaviour remains the same.
-  var exports = factory();
+  var exports = factory({});
   // Expose the factory function to enable the
   // setting of different ignore classes per instance.
   exports.withConfig = factory;
